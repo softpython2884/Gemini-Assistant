@@ -5,6 +5,7 @@ import winsound
 import sys
 from colorama import init, Fore, Style
 from assistant import GeminiAssistant
+from ghost import GhostTyper
 import config
 
 # Initialisation Colorama
@@ -54,12 +55,16 @@ def main():
         print(Fore.YELLOW + "Vérifiez votre fichier .env")
         return
 
+    ghost = GhostTyper()
+
     print(f"""
 {Fore.WHITE}Raccourcis actifs :
   {Fore.YELLOW}{config.HOTKEY_CAPTURE_DOC} {Fore.WHITE}: Ajouter la sélection aux Documents
   {Fore.YELLOW}{config.HOTKEY_CAPTURE_QUESTION} {Fore.WHITE}: Définir la sélection comme Question
   {Fore.YELLOW}{config.HOTKEY_EXECUTE} {Fore.WHITE}: Exécuter et coller la réponse
   {Fore.YELLOW}{config.HOTKEY_CLEAR} {Fore.WHITE}: Effacer le contexte
+  {Fore.YELLOW}{config.HOTKEY_GHOST_TOGGLE} {Fore.WHITE}: Ghost-typing — armer / pause / reprise
+  {Fore.YELLOW}{config.HOTKEY_GHOST_FLUSH} {Fore.WHITE}: Ghost-typing — coller le reste du buffer
     """)
     print(Fore.CYAN + "L'assistant tourne en arrière-plan... (Ctrl+C dans ce terminal pour quitter)")
 
@@ -88,17 +93,35 @@ def main():
     def on_execute():
         print(Fore.YELLOW + "[EXEC] Génération en cours...")
         beep_confirm() # Petit bip de début
-        
+
         response = assistant.generate_response()
-        
-        print(Fore.GREEN + "[EXEC] Réponse reçue. Collage...")
-        pyperclip.copy(response)
-        keyboard.send("ctrl+v")
+
+        if ghost.is_active():
+            ghost.load(response)
+            print(Fore.CYAN + f"[GHOST] Buffer chargé ({len(response)} chars). Tape pour révéler.")
+        else:
+            print(Fore.GREEN + "[EXEC] Réponse reçue. Collage...")
+            pyperclip.copy(response)
+            keyboard.send("ctrl+v")
         beep_confirm()
 
     def on_clear():
         assistant.clear_context()
         print(Fore.WHITE + "[CLEAR] Mémoire effacée.")
+        beep_confirm()
+
+    def on_ghost_toggle():
+        ghost.toggle()
+        print(Fore.CYAN + f"[GHOST] {ghost.status_str()}")
+        beep_confirm()
+
+    def on_ghost_flush():
+        had_buffer = ghost.state in ("TYPING", "PAUSED") and bool(ghost.buffer)
+        ghost.flush()
+        if had_buffer:
+            print(Fore.CYAN + "[GHOST] Reste du buffer collé.")
+        else:
+            print(Fore.YELLOW + "[GHOST] Rien à coller.")
         beep_confirm()
 
     # Enregistrement des hotkeys
@@ -107,6 +130,8 @@ def main():
     keyboard.add_hotkey(config.HOTKEY_CAPTURE_QUESTION, on_capture_question)
     keyboard.add_hotkey(config.HOTKEY_EXECUTE, on_execute)
     keyboard.add_hotkey(config.HOTKEY_CLEAR, on_clear)
+    keyboard.add_hotkey(config.HOTKEY_GHOST_TOGGLE, on_ghost_toggle, suppress=True)
+    keyboard.add_hotkey(config.HOTKEY_GHOST_FLUSH, on_ghost_flush, suppress=True)
 
     # Boucle infinie pour garder le programme en vie
     keyboard.wait()

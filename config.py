@@ -6,6 +6,11 @@ HOTKEY_CAPTURE_QUESTION = "ctrl+2"
 HOTKEY_EXECUTE = "ctrl+3"
 HOTKEY_CLEAR = "ctrl+0"
 
+# Ghost-typing : la réponse IA est mise en mémoire et révélée caractère par caractère
+# au fur et à mesure que l'utilisateur appuie sur des touches.
+HOTKEY_GHOST_TOGGLE = "ctrl+decimal"  # Ctrl + Numpad .  (toggle ARMED / pause)
+HOTKEY_GHOST_FLUSH  = "ctrl+num 5"    # Ctrl + Numpad 5  (colle le reste du buffer ; fallback : "ctrl+76")
+
 # Configuration des modèles Gemini
 # Ordre de priorité des modèles
 MODELS = [
