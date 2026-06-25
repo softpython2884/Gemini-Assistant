@@ -87,6 +87,49 @@ function Restore-Normal {
     Get-Service nlasvc, netprofm | Format-Table Name, Status, StartType -AutoSize
 }
 
+function Force-Redetection {
+    Write-Host ""
+    Write-Host "  --- FORCER LA RE-DETECTION INTERNET ---" -ForegroundColor Magenta
+
+    # 1. On s'assure que les 2 services tournent (ordre important)
+    Write-Host "  Verification des services..." -ForegroundColor Cyan
+    try { Start-Service -Name netprofm -ErrorAction Stop } catch {}
+    try { Start-Service -Name nlasvc   -ErrorAction Stop } catch {}
+
+    # 2. On redemarre la/les carte(s) reseau actives -> NLA refait son test
+    Write-Host "  Redemarrage de la carte reseau (coupure ~5s)..." -ForegroundColor Cyan
+    $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
+    if ($adapters) {
+        foreach ($a in $adapters) {
+            try {
+                Restart-NetAdapter -Name $a.Name -ErrorAction Stop
+                Write-Host "    -> $($a.Name) redemarree" -ForegroundColor DarkGray
+            } catch {
+                # Plan B si Restart echoue : disable puis enable
+                Disable-NetAdapter -Name $a.Name -Confirm:$false -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+                Enable-NetAdapter  -Name $a.Name -Confirm:$false -ErrorAction SilentlyContinue
+                Write-Host "    -> $($a.Name) reactivee (plan B)" -ForegroundColor DarkGray
+            }
+        }
+    } else {
+        Write-Host "    Aucune carte active detectee." -ForegroundColor Yellow
+    }
+
+    # 3. On vide le cache DNS au passage
+    Write-Host "  Nettoyage du cache DNS..." -ForegroundColor Cyan
+    ipconfig /flushdns > $null
+
+    # 4. On laisse le temps a la carte de remonter et a NLA de re-tester
+    Write-Host "  Attente de la reconnexion..." -ForegroundColor Cyan
+    Start-Sleep -Seconds 6
+
+    Write-Host ""
+    Write-Host "  Termine ! L'icone devrait afficher l'acces internet." -ForegroundColor Green
+    Write-Host "  (Si ce n'est pas le cas, deconnecte/reconnecte le Wi-Fi" -ForegroundColor DarkGray
+    Write-Host "   ou redemarre le PC : NLA re-teste tout au boot.)" -ForegroundColor DarkGray
+}
+
 # --- Boucle principale du menu ---
 
 do {
@@ -102,6 +145,7 @@ do {
     Write-Host ""
     Write-Host "  [1] " -ForegroundColor White -NoNewline; Write-Host "Activer le faux hors-ligne (afficher le globe)"
     Write-Host "  [2] " -ForegroundColor White -NoNewline; Write-Host "Revenir a la normale (vraie icone Wi-Fi)"
+    Write-Host "  [4] " -ForegroundColor White -NoNewline; Write-Host "Forcer la re-detection internet (corrige 'pas d'internet')"
     Write-Host "  [3] " -ForegroundColor White -NoNewline; Write-Host "Quitter"
     Write-Host ""
     $choix = Read-Host "  Ton choix"
@@ -109,10 +153,11 @@ do {
     switch ($choix) {
         '1' { Enable-FauxHorsLigne; Write-Host ""; Read-Host "  Appuie sur Entree pour revenir au menu" }
         '2' { Restore-Normal;       Write-Host ""; Read-Host "  Appuie sur Entree pour revenir au menu" }
+        '4' { Force-Redetection;    Write-Host ""; Read-Host "  Appuie sur Entree pour revenir au menu" }
         '3' { Write-Host ""; Write-Host "  A plus !" -ForegroundColor Cyan; Start-Sleep -Seconds 1 }
         default {
             Write-Host ""
-            Write-Host "  Choix invalide, tape 1, 2 ou 3." -ForegroundColor Red
+            Write-Host "  Choix invalide, tape 1, 2, 4 ou 3." -ForegroundColor Red
             Start-Sleep -Seconds 2
         }
     }
